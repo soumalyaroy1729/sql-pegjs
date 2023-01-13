@@ -20,20 +20,20 @@ public class PegjsCosmosParser extends BasePegjsParser {
 
 		SKIP_LABELS.add("object_property_list");
 
-		SKIP_LABELS.add("scalar_expression");
-		SKIP_LABELS.add("scalar_binary_or_expression");
-		SKIP_LABELS.add("scalar_binary_and_expression");
-		SKIP_LABELS.add("scalar_binary_equality_expression");
-		SKIP_LABELS.add("scalar_binary_relational_expression");
-		SKIP_LABELS.add("scalar_in_expression");
-		SKIP_LABELS.add("scalar_between_expression");
-		SKIP_LABELS.add("scalar_binary_bitwise_or_expression");
-		SKIP_LABELS.add("scalar_binary_bitwise_xor_expression");
-		SKIP_LABELS.add("scalar_binary_bitwise_and_expression");
-		SKIP_LABELS.add("scalar_binary_shift_expression");
-		SKIP_LABELS.add("scalar_binary_additive_expression");
-		SKIP_LABELS.add("scalar_binary_multiplicative_expression");
-		SKIP_LABELS.add("scalar_unary_expression");
+//		SKIP_LABELS.add("scalar_expression");
+//		SKIP_LABELS.add("scalar_binary_or_expression");
+//		SKIP_LABELS.add("scalar_binary_and_expression");
+//		SKIP_LABELS.add("scalar_binary_equality_expression");
+//		SKIP_LABELS.add("scalar_binary_relational_expression");
+//		SKIP_LABELS.add("scalar_in_expression");
+//		SKIP_LABELS.add("scalar_between_expression");
+//		SKIP_LABELS.add("scalar_binary_bitwise_or_expression");
+//		SKIP_LABELS.add("scalar_binary_bitwise_xor_expression");
+//		SKIP_LABELS.add("scalar_binary_bitwise_and_expression");
+//		SKIP_LABELS.add("scalar_binary_shift_expression");
+//		SKIP_LABELS.add("scalar_binary_additive_expression");
+//		SKIP_LABELS.add("scalar_binary_multiplicative_expression");
+//		SKIP_LABELS.add("scalar_unary_expression");
 	}
 
 	private static List<String> SUPRESS_LABELS = new LinkedList<>();
@@ -44,10 +44,23 @@ public class PegjsCosmosParser extends BasePegjsParser {
 	private static List<String> SUPRESS_SUB_LABELS = new LinkedList<>();
 	static {
 		SUPRESS_SUB_LABELS.add("select");
+		SUPRESS_SUB_LABELS.add("object_property");
+		
 		SUPRESS_SUB_LABELS.add("from");
-		SUPRESS_SUB_LABELS.add("where");
-
 		SUPRESS_SUB_LABELS.add("collection_primary_expression");
+		SUPRESS_SUB_LABELS.add("collection_member_expression");
+		SUPRESS_SUB_LABELS.add("as");
+
+		SUPRESS_SUB_LABELS.add("join");
+		SUPRESS_SUB_LABELS.add("in");
+		SUPRESS_SUB_LABELS.add("scalar_member_expression");
+
+		SUPRESS_SUB_LABELS.add("where");
+		SUPRESS_SUB_LABELS.add("filter_condition");
+		
+		SUPRESS_SUB_LABELS.add("order");
+		SUPRESS_SUB_LABELS.add("by");
+		SUPRESS_SUB_LABELS.add("sort_specification");
 
 		SUPRESS_SUB_LABELS.add("identifier");
 		SUPRESS_SUB_LABELS.add("identifier_name");
@@ -94,7 +107,9 @@ public class PegjsCosmosParser extends BasePegjsParser {
 
 	public static void main(String[] args) throws Exception {
 
-		parse("SELECT * FROM employee");
+//		parse("SELECT * FROM employee");
+		
+		PegjsCosmosParserTest.main(args);
 
 	}
 
