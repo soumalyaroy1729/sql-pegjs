@@ -23,6 +23,7 @@ sql
 select_query
   = select _
     top:(top _ v:top_specification { return v })? _
+    distinct:distinct? _
     select:select_specification _
     from:(from _ v:from_specification { return v })? _
     where:(where _ v:filter_condition { return v })? _
@@ -277,6 +278,7 @@ comment
 
 select = "SELECT"i !identifier_start
 top = "TOP"i !identifier_start
+distinct = "DISTINCT"i !identifier_start
 from = "FROM"i !identifier_start
 where = "WHERE"i !identifier_start
 order = "ORDER"i !identifier_start
@@ -302,6 +304,7 @@ udf = "udf" !identifier_start
 reserved
   = select
   / top
+  / distinct
   / from
   / where
   / order
