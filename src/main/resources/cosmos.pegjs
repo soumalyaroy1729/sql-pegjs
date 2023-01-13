@@ -26,7 +26,8 @@ select_query
     select:select_specification _
     from:(from _ v:from_specification { return v })? _
     where:(where _ v:filter_condition { return v })? _
-    orderBy:(order _ by _ v:sort_specification { return v })?
+    orderBy:(order _ by _ v:sort_specification { return v })? _
+    groupBy:(group _ by _ v:group_specification { return v })?
     {
       return {
         type: 'select_query',
@@ -132,6 +133,16 @@ sort_expression
         order
       }
     }
+    
+group_specification
+  = head:scalar_expression tail:(_ "," _ v:scalar_expression { return v })*
+    {
+      return {
+        type: 'group_specification',
+        expressions: [head, ...tail]
+      }
+    }
+
 
 scalar_expression
   = scalar_conditional_expression
@@ -270,6 +281,7 @@ from = "FROM"i !identifier_start
 where = "WHERE"i !identifier_start
 order = "ORDER"i !identifier_start
 by = "BY"i !identifier_start
+group = "GROUP"i !identifier_start
 as = "AS"i !identifier_start
 join = "JOIN"i !identifier_start
 in = "IN"i !identifier_start
@@ -294,6 +306,7 @@ reserved
   / where
   / order
   / by
+  / group
   / as
   / join
   / in

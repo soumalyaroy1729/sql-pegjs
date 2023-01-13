@@ -120,10 +120,18 @@ public class PegjsCosmosParserTest {
 //		parseSQL("select * from ABC;");
 //		parseSQL("SELECT f.id, f.address.city\r\n" + "    FROM Family f\r\n" + "    ORDER BY f.address.city\r\n"
 //				+ "    OFFSET 1 LIMIT 1");
-////
+
+//		------------------------- Group By ------------------
+//		
+//		parseSQL("SELECT COUNT(UniqueLastNames)\r\n" + //
+//				" FROM (\r\n" + //
+//				" SELECT AVG(f.age)\r\n" + //
+//				" FROM f \r\n" + //
+//				" GROUP BY f.lastName\r\n" + //
+//				") AS UniqueLastNames");
+//		
 ////		--------This Nested query not Printing object-----------
-//		parseSQL("SELECT COUNT(UniqueLastNames)\r\n" + "FROM (\r\n" + "SELECT AVG(f.age)\r\n" + "FROM f \r\n"
-//				+ "GROUP BY f.lastName\r\n" + ") AS UniqueLastNames");
+//
 //		parseSQL("SELECT COUNT(1)\r\n" + "FROM (\r\n" + "SELECT AVG(f.age)\r\n" + "FROM f\r\n"
 //				+ "GROUP BY f.lastName\r\n" + ")\r\n" + "");
 //		parseSQL("SELECT COUNT(4)\r\n" + "FROM (\r\n" + "SELECT AVG(f.age)\r\n" + "FROM f\r\n"
