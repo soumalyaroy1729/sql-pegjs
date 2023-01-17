@@ -57,7 +57,7 @@ public class PegjsCosmosParser extends BasePegjsParser {
 		SUPRESS_SUB_LABELS.add("in");
 
 		SUPRESS_SUB_LABELS.add("where");
-		SUPRESS_SUB_LABELS.add("filter_condition");
+		SUPRESS_SUB_LABELS.add("exists");
 		
 		SUPRESS_SUB_LABELS.add("order");
 		SUPRESS_SUB_LABELS.add("by");
