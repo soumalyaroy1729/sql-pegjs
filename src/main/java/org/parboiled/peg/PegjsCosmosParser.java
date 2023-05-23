@@ -6,9 +6,9 @@ import java.util.List;
 import org.parboiled.Node;
 import org.parboiled.Rule;
 import org.parboiled.annotations.BuildParseTree;
-import org.parboiled.peg.util.ParseUtils;
 import org.parboiled.support.ParseTreeUtils;
 import org.parboiled.support.ParsingResult;
+import org.parboiled.util.ParseUtils;
 
 @BuildParseTree
 public class PegjsCosmosParser extends BasePegjsParser {
@@ -108,7 +108,7 @@ public class PegjsCosmosParser extends BasePegjsParser {
 
 	public static void main(String[] args) throws Exception {
 
-//		parse("SELECT * FROM employee");
+		parse("SELECT * FROM employee");
 		
 		PegjsCosmosParserTest.main(args);
 
