@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
+import java.util.regex.Pattern;
 
 import org.parboiled.parserunners.ParseRunner;
 import org.parboiled.support.ParseTreeUtils;
@@ -18,7 +19,12 @@ import org.parboiled.util.ParseUtils;
 public class PegjsCosmosParserTest {
 
 	public static void main(String[] args) throws Exception {
-
+		//test();
+		testPerf();
+	}
+	
+	public static void test() throws Exception {
+		
 //		parseSQL("SELECT *\r\n" + "    FROM Families f\r\n" + "    WHERE f.id = 'AndersenFamily'");
 //		parseSQL("SELECT {\"Name\":f.id, \"City\":f.address.city} AS Family\r\n" + //
 //				" FROM Families f\r\n" + //
@@ -518,8 +524,48 @@ public class PegjsCosmosParserTest {
 //				+ "    WHERE c.familyName = f.parents[0].familyName");
 
 	}
+	
+	public static void testPerf() throws Exception {
+		
+		for(int i=0; i <=10000 ; i++) {
+
+			// -- working
+//			parseSQL("SELECT f._rid, a AS orderByItems FROM Families AS f "); // 2-4
+//			parseSQL("SELECT f._rid, [a] AS orderByItems FROM Families AS f "); // 5-10
+//	
+//			// -- fixed - curly
+//			parseSQL("SELECT f._rid, [{\"item\": f.address.city}] AS orderByItems FROM Families AS f "); // 6-10 // 51
+//			parseSQL("SELECT f._rid, [{\"item\": f.address.city}] AS orderByItems, {\"givenName\": c.givenName} AS payload \n FROM Families AS f "); // 6-10 // 51
+//			parseSQL("SELECT f._rid, [{\"item\": f.address.city}] AS orderByItems, {\"givenName\": c.givenName} AS payload \n FROM Families AS f \n JOIN c IN f.children "); // 7-11 // 51
+//			parseSQL("SELECT f._rid, [{\"item\": f.address.city}] AS orderByItems, {\"givenName\": c.givenName} AS payload \n FROM Families AS f \n JOIN c IN f.children \n WHERE f.id = \"WakefieldFamily\""); // 7-13 // 51
+//			
+//			// - partial working
+//			parseSQL("SELECT f._rid, [{\"item\": f.address.city}] AS orderByItems, {\"givenName\": c.givenName} AS payload \n FROM Families AS f \n JOIN c IN f.children \n WHERE (f.id = \"WakefieldFamily\")"); // 14-28
+//			parseSQL("SELECT f._rid, [{\"item\": f.address.city}] AS orderByItems, {\"givenName\": c.givenName} AS payload \n FROM Families AS f \n JOIN c IN f.children \n WHERE (f.id = \"WakefieldFamily\") AND true"); // 14-28
+//			parseSQL("SELECT f._rid, [{\"item\": f.address.city}] AS orderByItems, {\"givenName\": c.givenName} AS payload \n FROM Families AS f \n JOIN c IN f.children \n WHERE (f.id = \"WakefieldFamily\") AND (true)"); // 17-35
+//			
+//			// -- fixed - curly + para
+//			parseSQL("SELECT f._rid, [{\"item\": f.address.city}] AS orderByItems, {\"givenName\": c.givenName} AS payload \n FROM Families AS f \n JOIN c IN f.children \n WHERE ((f.id = \"WakefieldFamily\"))"); // 14-28 // 70-140
+//			parseSQL("SELECT f._rid, [{\"item\": f.address.city}] AS orderByItems, {\"givenName\": c.givenName} AS payload \n FROM Families AS f \n JOIN c IN f.children \n WHERE ((f.id = \"WakefieldFamily\")) AND true"); //14-28 // 70-140
+//			parseSQL("SELECT f._rid, [{\"item\": f.address.city}] AS orderByItems, {\"givenName\": c.givenName} AS payload \n FROM Families AS f \n JOIN c IN f.children \n WHERE ((f.id = \"WakefieldFamily\") AND (true))"); // 17-35
+//			
+//			// -- not working
+			parseSQL("SELECT f._rid, [{\"item\": f.address.city}] AS orderByItems, {\"givenName\": c.givenName} AS payload \n FROM Families AS f \n JOIN c IN f.children \n WHERE ((f.id = \"WakefieldFamily\") AND (true)) \n ORDER BY f.address.city ASC"); // 210
+
+		}
+
+	}
+	
+	private static Pattern curly = Pattern.compile("\\{[^}]*}");
+	private static Pattern parastart = Pattern.compile("\\(\\(");
+	private static Pattern paraend = Pattern.compile("\\)\\)");
 
 	public static void parseSQL(String sql) throws Exception {
+
+		sql = curly.matcher(sql).replaceAll("a");
+		sql = parastart.matcher(sql).replaceAll("(");
+		sql = paraend.matcher(sql).replaceAll(")");
+//		System.out.println("mod_script : " + script);
 
 		System.out.println("--------------------------------------------");
 		System.out.println("sql : " + sql);
@@ -532,8 +578,8 @@ public class PegjsCosmosParserTest {
 
 		if (result.parseErrors.size() == 0) {
 
-			System.out.println("tree : ");
-			printTree(result);
+//			System.out.println("tree : ");
+//			printTree(result);
 
 			List<Map<String, Object>> verbObjectMapList = prepareVerbObjectMap(result);
 			System.out.println("verbObjectMapList : " + verbObjectMapList);
@@ -548,7 +594,7 @@ public class PegjsCosmosParserTest {
 
 	}
 
-	private static void printTree(ParsingResult<?> result) {
+	public static void printTree(ParsingResult<?> result) {
 
 		ParseUtils.visitTree(result.parseTreeRoot, (node, level) -> {
 //			if ("select".equals(node.getLabel()) //
