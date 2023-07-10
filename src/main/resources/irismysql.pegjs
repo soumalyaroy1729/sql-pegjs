@@ -16,7 +16,6 @@
     'BOTH': true,
     'BY': true,
     'BOOLEAN': true,
-    'BUILD': true,
 
     'CALL': true,
     'CASCADE': true,
@@ -36,8 +35,6 @@
     'CURRENT_TIMESTAMP': true,
     'CURRENT_USER': true,
     'CURSOR': true,
-    'CACHED': true,
-    'CONNECTION': true,
 
     'DATABASE': true,
     'DATABASES': true,
@@ -83,7 +80,6 @@
     'FOREIGN': true,
     'FULLTEXT': true,
     'FUNCTION': true,
-    'FOREIGN': true,
 
     'GENERATED': true,
     'GET': true,
@@ -98,7 +94,6 @@
     'HOUR_MICROSECOND': true,
     'HOUR_MINUTE': true,
     'HOUR_SECOND': true,
-    'HOST': true,
 
     // 'IF': true,
     'IGNORE': true,
@@ -122,7 +117,6 @@
     'IO_BEFORE_GTIDS': true,
     'IS': true,
     'ITERATE': true,
-    'INDEX': true,
 
     'JOIN': true,
     'JSON_TABLE': true,
@@ -164,11 +158,8 @@
     'MINUS': true,
     'MOD': true,
     'MODIFIES': true,
-    'MODEL': true,
-    'ML' : true,
-    'METHOD' : true,
-    'MODIFY': true,
-    
+
+
     'NATURAL': true,
     'NOT': true,
     'NO_WRITE_TO_BINLOG': true,
@@ -196,10 +187,6 @@
     'PRIMARY': true,
     'PROCEDURE': true,
     'PURGE': true,
-    'PREDICTING': true,
-    
-    'QUERY': true,
-    'QUERIES': true,
 
     'RANGE': true,
     'RANK': true, // added in 8.0.2 (reserved)
@@ -248,8 +235,6 @@
     'STORED': true,
     'STRAIGHT_JOIN': true,
     'SYSTEM': true,
-    'STATIC': true,
-    'SERVER': true,
 
     'TABLE': true,
     'TERMINATED': true,
@@ -261,8 +246,6 @@
     'TRAILING': true,
     'TRIGGER': true,
     'TRUE': true,
-    'TRAIN': true,
-    'TUNE': true,
 
     'UNION': true,
     'UNIQUE': true,
@@ -282,7 +265,6 @@
     'VARCHARACTER': true,
     'VARYING': true,
     'VIRTUAL': true,
-    'VALIDATE': true,
 
     'WHEN': true,
     'WHERE': true,
