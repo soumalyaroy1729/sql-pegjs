@@ -21,6 +21,7 @@
     'CASCADE': true,
     'CASE': true,
     'CHAR': true,
+    'CHARACTER': true,
     'CHECK': true,
     'COLLATE': true,
     // 'COLUMN': true,
@@ -98,6 +99,7 @@
     // 'IF': true,
     'IGNORE': true,
     'IN': true,
+    'IMAGE': true,
     'INNER': true,
     'INFILE': true,
     'INOUT': true,
@@ -158,6 +160,7 @@
     'MINUS': true,
     'MOD': true,
     'MODIFIES': true,
+    'MONEY': true,
 
 
     'NATURAL': true,
@@ -412,6 +415,7 @@ cmd_stmt
   / create_stmt
   / truncate_stmt
   / rename_stmt
+  / call_func_stmt
   / call_stmt
   / use_stmt
   / alter_stmt
@@ -423,10 +427,14 @@ cmd_stmt
   / savepoint_stmt
   / rollback_stmt
   / grant_stmt
+  / grant_privilege_stmt
+  / revoke_stmt
   / load_data_stmt
-  / purge_table_stmt
+  / purge_queries_stmt
+  / purge_cached_queries_stmt
   / tune_table_stmt
   / create_query_stmt
+  / create_or_replace_query_stmt
   / drop_query_stmt
   / create_model_stmt
   / train_model_stmt
@@ -436,6 +444,7 @@ cmd_stmt
   / purge_model_stmt
   / drop_model_stmt
   / create_mlconfig_stmt
+  / create_or_replace_mlconfig_stmt
   / set_mlconfig_stmt
   / alter_mlconfig_stmt
   / drop_mlconfig_stmt
@@ -452,23 +461,49 @@ cmd_stmt
   / create_foreigntable_stmt
   / alter_foreigntable_stmt
   / alter_rename_stmt
+  / modify_stmt
+  / delete_user_stmt
+  / delete_role_stmt
+  / delete_resource_stmt
+  / delete_namespace_stmt
+  / delete_section_db_stmt
   / modify_rename_stmt
   / only_alter_stmt
   / only_modify_stmt
   / drop_foreigntable_stmt
+  / transaction_stmt
+  / set_transaction_stmt
+  / commit_stmt
+  / explain_stmt
+  / freeze_stmt
+  / unfreeze_stmt
+  / intransaction_stmt
+  / intrans_stmt
+  / set_option_stmt
 
 
 
 create_stmt
   = create_table_stmt
+  / create_temporary_table_stmt
+  / create_global_temporary_table_stmt
   / create_trigger_stmt
+  / create_or_replace_trigger_stmt
   / create_index_stmt
   / create_db_stmt
+  / create_section_db_stmt
+  / create_schema_stmt
   / create_view_stmt
+  / create_or_replace_view_stmt
   / create_procedure_stmt
+  / create_or_replace_procedure_stmt
   / create_aggregate_stmt
+  / create_or_replace_aggregate_stmt
   / create_user_stmt
   / create_role_stmt
+  / create_func_stmt
+  / create_resource_stmt
+  / create_namespace_stmt
  
  
 
@@ -502,7 +537,7 @@ multiple_stmt
     }
 
 set_op
-  = KW_UNION __ KW_ALL { return 'union all' }
+  = KW_UNION __ KW_ALL __ (o:optimize_option)? { return 'union all' }
   / KW_UNION { return 'union' }
   / KW_MINUS { return 'minus' }
   / KW_INTERSECT { return 'intersect' }
@@ -556,39 +591,87 @@ if_not_exists_stmt
 
 savepoint_stmt
   = KW_SAVEPOINT __
-    ident __
-    
+    savepoint_name __
+       
 rollback_stmt
  = KW_ROLLBACK __
    KW_WORK? __
    KW_TO? __
    savepoint_stmt? __
    
+savepoint_name
+= iris_ident_start? ident (__ DOT __ ident)?
+
 grant_stmt
+  =  KW_GRANT __
+     role_name __
+     KW_TO __
+     column_list_role? __
+   / KW_GRANT __
+    (KW_SELECT / KW_INSERT / KW_UPDATE / KW_DELETE) __
+     KW_ON __
+     (KW_TABLE / KW_FUNCTION / KW_PROCEDURE / KW_SCHEMA) __
+     (schema_list / column_list)? __
+     KW_TO __
+     role_name __
+  / KW_GRANT __
+    privilege __
+     KW_ON __
+     table_name? __
+     KW_TO __
+     role_name __
+     (KW_WITH __ KW_GRANT __ "OPTION"i / KW_WITH __ "ADMIN"i __ "OPTION"i)?
+ 
+privilege
+  = (iris_ident_start KW_ALTER / KW_SELECT / KW_INSERT / KW_UPDATE / KW_DELETE / KW_ALL) __ (LPAREN __ column_list __ RPAREN)? __ (COMMA __ (KW_SELECT / KW_INSERT / KW_UPDATE / KW_DELETE / KW_ALL) __ (LPAREN __ column_list __ RPAREN)?)*  
+
+grant_privilege_stmt
  = KW_GRANT __
-   column_list_role? __
+   ident __
    KW_TO __
    column_list_role? __
-  / KW_GRANT __
-   (KW_SELECT / KW_INSERT / KW_UPDATE / KW_DELETE) __
-    KW_ON __
-    (KW_TABLE / KW_FUNCTION / KW_PROCEDURE / KW_SCHEMA) __
-    column_list? __
-    KW_TO __
-    ident __
-  / KW_GRANT __
-   (KW_SELECT / KW_INSERT / KW_UPDATE / KW_DELETE / KW_ALL) __
-    KW_ON __
-   (ident? __ DOT? __ STAR?)
-    table_name? __
-    KW_TO __
-    ident __
       
 column_list_role
- = head:ident tail:(__ COMMA __ ident __ )* {
+ = head:role_name tail:(__ COMMA __ role_name __ )* {
       return createList(head, tail);
     } 
     
+revoke_stmt
+ = KW_REVOKE __
+   admin_privilege __
+   KW_FROM __ grantee_name __
+   / KW_REVOKE __
+   role_name __
+   KW_FROM __ grantee_name __ 
+   / KW_REVOKE __
+   (KW_GRANT __ "OPTION"i __ KW_FOR)? __
+   privilege __
+   KW_ON __
+   table_ref_list __
+   KW_FROM __ grantee_name __
+   ("CASCADE"i / "RESTRICT"i)? __
+   (KW_AS __ grantor_name)? __
+   / KW_REVOKE __
+   (KW_GRANT __ "OPTION"i __ KW_FOR)? __
+   KW_SELECT __ KW_ON __ ("CUBE"i / "CUBES"i) __
+   table_ref_list __
+   KW_FROM __ grantee_name __
+   / KW_REVOKE __
+   privilege __
+   KW_ON __
+   table_name __
+   KW_FROM __ grantee_name __
+   ("CASCADE"i / "RESTRICT"i)? __
+     
+admin_privilege
+= iris_ident_start ("CREATE_METHOD"i / "DROP_METHOD"i / "CREATE_FUNCTION"i / "DROP_FUNCTION"i / "CREATE_PROCEDURE"i / "DROP_PROCEDURE"i / "CREATE_QUERY"i / "DROP_QUERY"i / "CREATE_TABLE"i / "ALTER_TABLE"i / "DROP_TABLE"i / "CREATE_VIEW"i / "ALTER_VIEW"i / "DROP_VIEW"i / "CREATE_TRIGGER"i / "DROP_TRIGGER"i / "DROP_UNOWNED"i / "DB_OBJECT_DEFINITION"i)
+     
+grantee_name
+= dt:iris_ident_start? ident tail:(__ DOT __ ident)?
+
+grantor_name
+= dt:iris_ident_start? ident tail:(__ DOT __ ident)?
+
 load_data_stmt
  = KW_LOAD __
    KW_DATA __
@@ -607,9 +690,34 @@ column_list_load
 
 create_db_stmt
   = a:KW_CREATE __
-    k:(KW_DATABASE / KW_SCHEMA) __
+    k:KW_DATABASE __
     ife:if_not_exists_stmt? __
-    t:ident_name __
+    t:database_name __
+    c:create_db_definition? {
+      return {
+        tableList: Array.from(tableList),
+        columnList: columnListTableAlias(columnList),
+        ast: {
+          type: a[0].toLowerCase(),
+          keyword: 'database',
+          if_not_exists: ife,
+          database: t,
+          create_definitions: c,
+        }
+      }
+    }
+    
+create_section_db_stmt
+  = KW_CREATE __
+    "SECTION"i __
+     KW_DATABASE __
+     database_name __
+     
+create_schema_stmt
+= a:KW_CREATE __
+    k:KW_SCHEMA __
+    ife:if_not_exists_stmt? __
+    t:schema_name __
     c:create_db_definition? {
       return {
         tableList: Array.from(tableList),
@@ -624,8 +732,12 @@ create_db_stmt
       }
     }
 
+database_name
+= iris_ident_start? ident (__ DOT __ ident)?
+
 view_with
-  = KW_WITH __ c:("CASCADED"i / "LOCAL"i) __ "CHECK"i __ "OPTION" {
+  = KW_WITH __ "READ"i __ "ONLY"i
+  / KW_WITH __ c:("CASCADED"i / "LOCAL"i) __ "CHECK"i __ "OPTION" {
     return `with ${c.toLowerCase()} check option`
   }
   / KW_WITH __ "CHECK"i __ "OPTION" {
@@ -634,7 +746,35 @@ view_with
 
 create_view_stmt
   = a:KW_CREATE __
-  or:(KW_OR __ KW_REPLACE)? __
+  al:("ALGORITHM"i __ KW_ASSIGIN_EQUAL __ ("UNDEFINED"i / "MERGE"i / "TEMPTABLE"i))? __
+  df:trigger_definer? __
+  ss:("SQL"i __ "SECURITY"i __ ("DEFINER"i / "INVOKER"i))? __
+  KW_VIEW __ v:table_name __ c:(LPAREN __ column_list __ RPAREN)? __
+  KW_AS __ s:select_stmt_nake __
+  w:view_with? {
+    v.view = v.table
+    delete v.table
+    return {
+      tableList: Array.from(tableList),
+      columnList: columnListTableAlias(columnList),
+      ast: {
+        type: a[0].toLowerCase(),
+        keyword: 'view',
+        replace: or && 'or replace',
+        algorithm: al && al[4],
+        definer: df,
+        sql_security: ss && ss[4],
+        columns: c && c[2],
+        select: s,
+        view: v,
+        with: w,
+      }
+    }
+  }
+  
+create_or_replace_view_stmt
+ = a:KW_CREATE __
+  (KW_OR __ KW_REPLACE)? __
   al:("ALGORITHM"i __ KW_ASSIGIN_EQUAL __ ("UNDEFINED"i / "MERGE"i / "TEMPTABLE"i))? __
   df:trigger_definer? __
   ss:("SQL"i __ "SECURITY"i __ ("DEFINER"i / "INVOKER"i))? __
@@ -661,13 +801,17 @@ create_view_stmt
     }
   }
 
+index_name
+= iris_ident_start? ident (__ DOT __ ident)*
+
 create_index_stmt
   = a:KW_CREATE __
-  kw:(KW_UNIQUE / KW_FULLTEXT / KW_SPATIAL)? __
+  kw:(KW_UNIQUE / KW_FULLTEXT / KW_SPATIAL / "BITMAP"i / "BITMAPEXTENT"i / "BITSLICE"i / "COLUMNAR"i)? __
   t:KW_INDEX __
-  n:ident __
+  n:index_name __
   um:index_type? __
   on:KW_ON __
+  KW_TABLE? __
   ta:table_name __
   LPAREN __ cols:column_order_list __ RPAREN __
   io:index_options? __
@@ -694,7 +838,6 @@ create_index_stmt
 
 create_table_stmt
   = a:KW_CREATE __
-    tp:KW_TEMPORARY? __
     KW_TABLE __
     ife:if_not_exists_stmt? __
     t:table_name __
@@ -714,7 +857,108 @@ create_table_stmt
       }
     }
   / a:KW_CREATE __
-    tp:KW_TEMPORARY? __
+    KW_TABLE __
+    ife:if_not_exists_stmt? __
+    t:table_name __
+    c:create_table_definition? __
+    to:table_options? __
+    ir:(KW_IGNORE / KW_REPLACE)? __
+    as:KW_AS? __
+    qe:set_op_stmt? {
+      if(t) tableList.add(`create::${t.db}::${t.table}`)
+      return {
+        tableList: Array.from(tableList),
+        columnList: columnListTableAlias(columnList),
+        ast: {
+          type: a[0].toLowerCase(),
+          keyword: 'table',
+          temporary: tp && tp[0].toLowerCase(),
+          if_not_exists: ife,
+          table: [t],
+          ignore_replace: ir && ir[0].toLowerCase(),
+          as: as && as[0].toLowerCase(),
+          query_expr: qe && qe.ast,
+          create_definitions: c,
+          table_options: to
+        }
+      }
+    }
+    
+create_temporary_table_stmt
+ = a:KW_CREATE __
+    KW_TEMPORARY? __
+    KW_TABLE __
+    ife:if_not_exists_stmt? __
+    t:table_name __
+    lt:create_like_table {
+      if(t) tableList.add(`create::${t.db}::${t.table}`)
+      return {
+        tableList: Array.from(tableList),
+        columnList: columnListTableAlias(columnList),
+        ast: {
+          type: a[0].toLowerCase(),
+          keyword: 'table',
+          temporary: tp && tp[0].toLowerCase(),
+          if_not_exists: ife,
+          table: [t],
+          like: lt
+        }
+      }
+    }
+    / a:KW_CREATE __
+    KW_TEMPORARY? __
+    KW_TABLE __
+    ife:if_not_exists_stmt? __
+    t:table_name __
+    c:create_table_definition? __
+    to:table_options? __
+    ir:(KW_IGNORE / KW_REPLACE)? __
+    as:KW_AS? __
+    qe:set_op_stmt? {
+      if(t) tableList.add(`create::${t.db}::${t.table}`)
+      return {
+        tableList: Array.from(tableList),
+        columnList: columnListTableAlias(columnList),
+        ast: {
+          type: a[0].toLowerCase(),
+          keyword: 'table',
+          temporary: tp && tp[0].toLowerCase(),
+          if_not_exists: ife,
+          table: [t],
+          ignore_replace: ir && ir[0].toLowerCase(),
+          as: as && as[0].toLowerCase(),
+          query_expr: qe && qe.ast,
+          create_definitions: c,
+          table_options: to
+        }
+      }
+    }
+    
+create_global_temporary_table_stmt
+ = a:KW_CREATE __
+    "GLOBAL"i __
+    KW_TEMPORARY? __
+    KW_TABLE __
+    ife:if_not_exists_stmt? __
+    t:table_name __
+    lt:create_like_table {
+      if(t) tableList.add(`create::${t.db}::${t.table}`)
+      return {
+        tableList: Array.from(tableList),
+        columnList: columnListTableAlias(columnList),
+        ast: {
+          type: a[0].toLowerCase(),
+          keyword: 'table',
+          temporary: tp && tp[0].toLowerCase(),
+          if_not_exists: ife,
+          table: [t],
+          like: lt
+        }
+      }
+    }
+    / a:KW_CREATE __
+    "GLOBAL"i __
+    KW_TEMPORARY? __
     KW_TABLE __
     ife:if_not_exists_stmt? __
     t:table_name __
@@ -745,36 +989,91 @@ create_table_stmt
 create_user_stmt    
  = KW_CREATE __
    KW_USER __
-   ident __
+   user_name __
    auth_option? __
-   ident __
-   
+   ident? __
+  
+user_name
+= iris_ident_start? ident ((KW_VAR__PRE_AT / DOT) __ ident)? 
+
+role_name
+= iris_ident_start? ident ((KW_VAR__PRE_AT / DOT) __ ident)? 
+
+procedure_name
+= iris_ident_start? ident (__ DOT __ ident)?
+
+func_name
+= iris_ident_start? ident (__ DOT __ ident)?
+
+resource_name
+= iris_ident_start? ident (__ DOT __ ident)?
+
+namespace_name
+= iris_ident_start? ident (__ DOT __ ident)?
+ 
 create_role_stmt  
 = KW_CREATE __ 
     KW_ROLE __
-    ident __  
+    role_name __  
 
 create_procedure_stmt
+ = KW_CREATE __
+  (KW_PROCEDURE / KW_PROC) __
+   procedure_name __
+   (LPAREN __  column_list_proc? __ RPAREN)? __ 
+   (KW_FOR __ table_name)? __
+   KW_BEGIN? __ 
+   (crud_stmt / select_stmt)? __ SEMICOLON? __
+   KW_END? __
+   
+create_or_replace_procedure_stmt
  = KW_CREATE __ 
   (KW_OR __ KW_REPLACE)? __
   (KW_PROCEDURE / KW_PROC) __
-   proc_func_name __
+   procedure_name __
    (LPAREN __  column_list_proc? __ RPAREN)? __ 
    (KW_FOR __ table_name)? __
-   KW_BEGIN __ 
-   (crud_stmt / select_stmt) __ SEMICOLON __
-   KW_END __
+   KW_BEGIN? __ 
+   (crud_stmt / select_stmt)? __ SEMICOLON? __
+   KW_END? __
    
+create_func_stmt
+ = KW_CREATE __
+   KW_FUNCTION __ 
+   func_name __
+   
+create_resource_stmt
+ = KW_CREATE __ 
+   "RESOURCE"i __
+   resource_name __
+   
+create_namespace_stmt
+ = KW_CREATE __
+   "SECTION"i __
+   "NAMESPACE"i __
+   namespace_name __
+  
 create_aggregate_stmt 
  = KW_CREATE __
-   (KW_OR __ KW_REPLACE)? __
    KW_AGGREGATE __
-   proc_func_name __
+   table_name __
    (LPAREN __  aggregate_parameter? __ RPAREN)? __
    (KW_RETURNS __ data_type)? __
    KW_ITERATE __ KW_WITH __ proc_func_name __
-   aggregate_optional? __
-   aggregate_optional
+   aggregate_optional? __ 
+   
+   
+create_or_replace_aggregate_stmt
+ = KW_CREATE __
+  (KW_OR __ KW_REPLACE)? __
+   KW_AGGREGATE __
+   table_name __
+   (LPAREN __  aggregate_parameter? __ RPAREN)? __
+   (KW_RETURNS __ data_type)? __
+   KW_ITERATE __ KW_WITH __ proc_func_name __
+   aggregate_optional? __ 
+ 
+aggregate_optional
 = ("INITIALIZE"i / "MERGE"i / "FINALIZE"i) __ KW_WITH __ proc_func_name __
    
 column_list_proc
@@ -783,43 +1082,45 @@ column_list_proc
     } 
     
 aggregate_parameter
-= __ ident __ data_type __
+= __ ident_name __ data_type __
 
 proc_parameter
- = (KW_IN / KW_OUT / KW_INOUT) __ ident __ data_type __ default_expr? __
- 
- 
+ = (KW_IN / KW_OUT / KW_INOUT) __ ident_name __ data_type __ expr_list? __ default_expr? __
+  
 auth_option
 = (KW_IDENTIFIED / KW_IDENTIFY) __ KW_BY __
-
-   
-purge_table_stmt
+ 
+purge_queries_stmt
  = a:KW_PURGE __
-    KW_CACHED? __
     KW_QUERIES __
-    KW_BY __
-    properties:(ident __ "\"" int "\"" __ / KW_TABLE __ t:table_name __ / KW_NAME __ ident __)? __
-    / a:KW_PURGE __
-    KW_CACHED? __
+    (KW_BY __ (ident __ "\"" int "\"" / KW_TABLE __ t:table_name / KW_NAME __ class_name_list))? __
+     
+purge_cached_queries_stmt
+ = a:KW_PURGE __
+    KW_CACHED __
     KW_QUERIES __
-    
+    (KW_BY __ (ident __ "\"" int "\"" / KW_TABLE __ t:table_name / KW_NAME __ class_name_list))? __
+
 create_model_stmt
  = a:KW_CREATE __
    KW_MODEL __
    ife:if_not_exists_stmt? __
-   ident __
-   KW_PREDICTING __ LPAREN __ ident __ RPAREN __
-   (KW_FROM __ ident __ / KW_WITH __ / KW_WITH __ KW_FROM __ ident __) __
+   model_name __
+   KW_PREDICTING __ LPAREN __ ident __ data_type? __ RPAREN __
+   (KW_FROM __ model_name / KW_WITH __ LPAREN __ column_list_model __ RPAREN __ KW_FROM __ model_name / KW_WITH __ LPAREN __ column_list_model __ RPAREN) __
+   
+column_list_model
+ = head:column __ data_type? tail:(__ COMMA __ column __ data_type)*
 
 train_model_stmt
   = a:KW_TRAIN __
     KW_MODEL __
-    ident __
-    (KW_AS __ ident)? __
-    (KW_NOT __ KW_DEFAULT __)? __
-    (KW_FOR __ ident __)?
-    (KW_WITH __ )? __
-    (f:KW_FROM __ ident)? __
+    model_name __
+    (KW_AS __ model_name)? __
+    (KW_NOT __ KW_DEFAULT)? __
+    (KW_FOR __ model_name)? __
+    (KW_WITH)? __
+    (f:KW_FROM __ model_name)? __
 
   
 tune_table_stmt
@@ -832,10 +1133,10 @@ tune_table_stmt
 validate_model_stmt
  = a:KW_VALIDATE __
   KW_MODEL __
-  ident __
-  (KW_AS __ ident)? __
-  (KW_USE __ ident)? __
-  (f:KW_FROM __ ident) __
+  model_name __
+  (KW_AS __ model_name)? __
+  (KW_USE __ model_name)? __
+  (f:KW_FROM __ model_name) __
   
 insert_or_update_stmt
  = KW_INSERT __
@@ -843,13 +1144,14 @@ insert_or_update_stmt
    KW_UPDATE __
    KW_INTO? __
    t:table_name __
-   
-  
+   (LPAREN __ column_list __ RPAREN)? __ 
+   select_stmt? __
+    
 alter_model_stmt
  = a:KW_ALTER __
    KW_MODEL __
-   ident __
-   (purge_model_stmt KW_ALL? __ / KW_DEFAULT __ ident? __)? __
+   model_name __
+   (purge_model_stmt KW_ALL? / KW_DEFAULT __ model_name?)? __
   
 purge_model_stmt
  = KW_PURGE __
@@ -857,59 +1159,84 @@ purge_model_stmt
 drop_model_stmt
  = a:KW_DROP __
   KW_MODEL __
-  ident __
+  model_name __
   
 create_query_stmt
  = a:KW_CREATE __
+   KW_QUERY __
+   query_name __
+   (LPAREN __  column_list_proc? __ RPAREN)? __
+   characteristics? __ 
+   (KW_FOR __ table_name)? __
+   KW_BEGIN? __ 
+   (crud_stmt / select_stmt)? __ SEMICOLON? __
+   KW_END? __
+   
+create_or_replace_query_stmt
+ = a:KW_CREATE __
    (KW_OR __ KW_REPLACE)? __
    KW_QUERY __
-   ident __
+   query_name __
+   (LPAREN __  column_list_proc? __ RPAREN)? __
+   characteristics? __ 
+   (KW_FOR __ table_name)? __
+   KW_BEGIN? __ 
+   (crud_stmt / select_stmt)? __ SEMICOLON? __
+   KW_END? __
+   
+characteristics
+ = ("CONTAINID"i int / KW_FOR __ class_name / "FINAL"i / KW_PROCEDURE / KW_PROC / "RESULTS"i __ LPAREN __ column_list __ RPAREN / "SELECTMODE"i __ ("LOGICAL"i / "ODBC"i / "RUNTIME"i / "DISPLAY"i))
    
 drop_query_stmt 
  = a:KW_DROP __
   KW_QUERY __
   if_exists? __ 
-  ident __
-  (KW_FROM __ ident __)? __
+  query_name __
+  (KW_FROM __ class_name)? __
   
 create_mlconfig_stmt
+ = a:KW_CREATE __
+   KW_ML __
+   KW_CONFIGURATION __
+   mlconfig_name __
+   
+create_or_replace_mlconfig_stmt
  = a:KW_CREATE __
    (KW_OR __ KW_REPLACE)? __
    KW_ML __
    KW_CONFIGURATION __
-   ident __
+   mlconfig_name __
   
 set_mlconfig_stmt
  = a:KW_SET __
    KW_ML __
    KW_CONFIGURATION __
-   ident __
+   mlconfig_name __
 
 alter_mlconfig_stmt
  = a:KW_ALTER __
    KW_ML __
    KW_CONFIGURATION __
-   ident __
+   mlconfig_name __
    
 drop_mlconfig_stmt
  = a:KW_DROP __
    KW_ML __
    KW_CONFIGURATION __
-   ident __
+   mlconfig_name __
    
 create_method_stmt
  = a:KW_CREATE __
-  (KW_OR __ KW_REPLACE)? __
   KW_STATIC? __
   KW_METHOD __
-  ident __
+  method_name __
    
 drop_method_stmt
  = a:KW_DROP __
    KW_METHOD __
    ife:if_exists? __
-   ident __
-   (KW_FROM __ ident __)? __
+   method_name __
+   (KW_FROM __ method_name)? __
    
 build_index_stmt
  = a:KW_BUILD __
@@ -917,19 +1244,19 @@ build_index_stmt
    "%NOLOCK"? __
    "%NOJOURN"? __
    KW_FOR __ 
-   (KW_TABLE __ t:table_name __ / KW_SCHEMA __ ident __ / KW_ALL)
+   (KW_TABLE __ t:table_name / KW_SCHEMA __ schema_name / KW_ALL)
    
 create_foreignserver_stmt
  = a:KW_CREATE __
    KW_FOREIGN __
    KW_SERVER __
-   ident __
+   server_name __
    
 alter_foreignserver_stmt
  = a:KW_ALTER __
    KW_FOREIGN __
    KW_SERVER __
-   ident __
+   server_name __
    (alter_host_stmt / alter_connection_stmt / modify_host_stmt / modify_connection_stmt)
    
 alter_host_stmt
@@ -948,9 +1275,10 @@ drop_foreignserver_stmt
  = a:KW_DROP __
    KW_FOREIGN __
    KW_SERVER __
-   ident __
-  
-create_foreigntable_stmt
+   server_name __
+   ("RESTRICT"i / "CASCADE"i)? __
+   
+  create_foreigntable_stmt
  = a:KW_CREATE __
    KW_FOREIGN __
    KW_TABLE __
@@ -958,10 +1286,21 @@ create_foreigntable_stmt
    t:table_name __
    c:(LPAREN __ column_list_foreigntable __ RPAREN)? __
    KW_SERVER __
-   ident __
+   server_name __
+   (KW_TABLE __ "'"? table_name "'"?)? __ 
+   / a:KW_CREATE __
+   KW_FOREIGN __
+   KW_TABLE __
+   ife:if_not_exists_stmt? __
+   c:(LPAREN __ column_list_foreigntable __ RPAREN)? __
+   table_name __
+   KW_SERVER __
+   server_name __
+   (KW_TABLE __ "'"? table_name "'"?)? __
+   
    
 column_list_foreigntable
-= head:column __ data_type tail:(__ COMMA __ column __ data_type)* __
+= head:column __ data_type tail:(__ COMMA __ column __ data_type)*
 
 alter_foreigntable_stmt
  = a:KW_ALTER __
@@ -971,16 +1310,22 @@ alter_foreigntable_stmt
    (alter_rename_stmt / modify_rename_stmt / only_alter_stmt / only_modify_stmt ) __
    
 alter_rename_stmt
-= KW_ALTER __ column_name __ KW_RENAME __ column_name __
+ = KW_ALTER __ KW_COLUMN? __ column_name __ KW_RENAME __ column_name __ (KW_VALUES __ LPAREN __ column_name __ RPAREN)?
 
 modify_rename_stmt
-= KW_MODIFY __ column_name __ KW_RENAME __ column_name __
+ = KW_MODIFY __ column_name __ KW_RENAME __ column_name __ (COMMA __ column_name __ KW_RENAME __ column_name)* __ (KW_VALUES __ LPAREN __ column_name __ COMMA __ column_name __ (COMMA __ column_name)* __ RPAREN)?
 
 only_alter_stmt
-= KW_ALTER __
+ = KW_ALTER __ KW_COLUMN? __ only_alter_column_list
+  
+only_alter_column_list
+ = column __ data_type
 
 only_modify_stmt
-= KW_MODIFY __
+ = KW_MODIFY __ KW_COLUMN? __ only_modify_column_list
+ 
+only_modify_column_list
+ = head:column __ data_type tail:(__ COMMA __ column __ data_type)*
 
 drop_foreigntable_stmt
  = a:KW_DROP __
@@ -988,8 +1333,34 @@ drop_foreigntable_stmt
    KW_TABLE __
    ife:if_exists? __
    t:table_name __
+   ("RESTRICT"i / "CASCADE"i)? __
+   
+transaction_stmt
+ = "START"i __ "TRANSACTION"i __ 
+ 
+commit_stmt
+ = "COMMIT"i __ ("WORK"i)? __
+ 
+explain_stmt
+ = "EXPLAIN"i __ ("ALT"i / "STAT"i)? __ (select_stmt / delete_stmt / update_stmt)
   
-  
+freeze_stmt
+ = "FREEZE"i __ "PLANS"i __ ("BY"i __ ("ID"i __ literal / KW_TABLE __ table_name / KW_SCHEMA __ schema_name))?
+ 
+unfreeze_stmt
+ = "UNFREEZE"i __ (KW_FROM __ "UPGRADE"i / "UPGRADE"i)? __ "PLANS"i __ ("BY"i __ ("ID"i __ literal / KW_TABLE __ table_name / KW_SCHEMA __ schema_name))?
+
+intransaction_stmt
+ = iris_ident_start "INTRANSACTION"i __
+ 
+intrans_stmt
+ = iris_ident_start "INTRANS"i __  
+ 
+set_option_stmt
+ = KW_SET __ "OPTION"i __
+ 
+set_transaction_stmt
+ = KW_SET __ "TRANSACTION"i __
   
 create_like_table_simple
   = KW_LIKE __ t: table_ref_list {
@@ -1103,6 +1474,9 @@ trigger_order
       trigger: t
     }
   }
+iris_trigger_order
+ = (KW_ORDER __ int)
+  
 trigger_body
   = KW_SET __ s:set_list {
     return {
@@ -1111,17 +1485,20 @@ trigger_body
     }
   }
 
+trigger_name
+= iris_ident_start? ident (__ DOT __ ident)?
+
 create_trigger_stmt
   = a:KW_CREATE __
     df:trigger_definer? __
     KW_TRIGGER __
     ife:if_not_exists_stmt? __
-    t:ident_name __
+    t:trigger_name __
     tt:trigger_time __
-    te:trigger_event __
-    KW_ON __ tb:table_name __ 'FOR'i __ 'EACH'i __ 'ROW'i __
+    te:trigger_event __ (COMMA __ trigger_event)* __ iris_trigger_order? __
+    (KW_ON / KW_OF) __ (column_list __ KW_ON)? __ tb:table_name __ ('FOR'i __ 'EACH'i __ 'ROW'i)? __ replace_insert_stmt? __
     tr:trigger_order? __
-    tbo:trigger_body __ {
+    tbo:trigger_body? __ {
       return {
         tableList: Array.from(tableList),
         columnList: columnListTableAlias(columnList),
@@ -1141,6 +1518,36 @@ create_trigger_stmt
       }
     }
 
+create_or_replace_trigger_stmt
+  = a:KW_CREATE __
+   (KW_OR __ KW_REPLACE)? __
+    df:trigger_definer? __
+    KW_TRIGGER __
+    ife:if_not_exists_stmt? __
+    t:trigger_name __
+    tt:trigger_time __
+    te:trigger_event __ (COMMA __ trigger_event)* __ iris_trigger_order? __
+    (KW_ON / KW_OF) __ (column_list __ KW_ON)? __ tb:table_name __ ('FOR'i __ 'EACH'i __ 'ROW'i)? __ replace_insert_stmt? __
+    tr:trigger_order? __
+    tbo:trigger_body? __ {
+      return {
+        tableList: Array.from(tableList),
+        columnList: columnListTableAlias(columnList),
+        ast: {
+          type: a[0].toLowerCase(),
+          definer: df,
+          keyword: 'trigger',
+          for_each: 'for each row',
+          if_not_exists: ife,
+          trigger: t,
+          trigger_time: tt,
+          trigger_event: te[0],
+          trigger_order: tr,
+          table: tb,
+          trigger_body: tbo,
+        }
+      }
+    }
 collate_expr
   = KW_COLLATE __ s:KW_ASSIGIN_EQUAL? __ ca:ident_name {
     return {
@@ -1196,6 +1603,19 @@ if_exists
   }
 
 drop_stmt
+ = drop_table_stmt
+ / drop_database_stmt
+ / drop_schema_stmt
+ / drop_user_stmt
+ / drop_view_stmt
+ / drop_aggregate_stmt
+ / drop_trigger_stmt
+ / drop_procedure_stmt
+ / drop_function_stmt
+ / drop_index_stmt
+ / drop_role_stmt
+
+drop_table_stmt
   = a:KW_DROP __
     r:KW_TABLE __
     ife: if_exists? __
@@ -1211,8 +1631,9 @@ drop_stmt
           name: t
         }
       };
-    }
-  / a:KW_DROP __
+    } 
+drop_view_stmt
+  = a:KW_DROP __
     r:KW_VIEW __
     ife:if_exists? __
     t:table_ref_list __
@@ -1230,11 +1651,13 @@ drop_stmt
         }
       };
     }
-  / a:KW_DROP __
+drop_index_stmt
+  = a:KW_DROP __
     r:KW_INDEX __
-    i:column_ref __
-    KW_ON __
-    t:table_name __
+    i:index_name __
+    KW_ON? __
+    KW_TABLE? __
+    t:table_name? __
     op:drop_index_opt? __ {
       return {
         tableList: Array.from(tableList),
@@ -1248,10 +1671,11 @@ drop_stmt
         }
       };
     }
-  / a:KW_DROP __
-    r:(KW_DATABASE / KW_SCHEMA) __
+drop_database_stmt
+  = a:KW_DROP __
+    r:KW_DATABASE __
     ife:if_exists? __
-    t:ident_name {
+    t:database_name {
       return {
         tableList: Array.from(tableList),
         columnList: columnListTableAlias(columnList),
@@ -1263,7 +1687,24 @@ drop_stmt
         }
       };
     }
-  / a:KW_DROP __
+drop_schema_stmt
+    =a:KW_DROP __
+    r:KW_SCHEMA __
+    ife:if_exists? __
+    t:schema_name {
+      return {
+        tableList: Array.from(tableList),
+        columnList: columnListTableAlias(columnList),
+        ast: {
+          type: a.toLowerCase(),
+          keyword: r.toLowerCase(),
+          prefix: ife,
+          name: t
+        }
+      };
+    }
+drop_trigger_stmt
+  = a:KW_DROP __
     r:KW_TRIGGER __
     ife:if_exists? __
     t:table_base 
@@ -1282,18 +1723,36 @@ drop_stmt
         }
       };
     }
-  / KW_DROP __
-    ( KW_USER / KW_ROLE ) __
-    ident __
-  / KW_DROP __
-   (KW_PROCEDURE / KW_FUNCTION / KW_PROC) __
+    
+drop_user_stmt
+  = KW_DROP __
+    KW_USER __
+    user_name __
+    
+drop_role_stmt
+  = KW_DROP __
+    KW_ROLE __
+    role_name __
+    
+drop_procedure_stmt
+   = KW_DROP __
+   (KW_PROCEDURE / KW_PROC) __
    if_exists? __
-   ident __
+   procedure_name __
    (KW_FROM __ table_name)? __
-  / KW_DROP __
+   
+drop_function_stmt
+   = KW_DROP __
+   KW_FUNCTION __
+   if_exists? __
+   func_name __
+   (KW_FROM __ table_name)? __
+   
+drop_aggregate_stmt
+   = KW_DROP __
     KW_AGGREGATE __
    if_exists? __
-   proc_func_name __
+   table_name __
    
 
 truncate_stmt
@@ -1314,7 +1773,8 @@ truncate_stmt
 
 use_stmt
   = KW_USE  __
-    d:ident {
+    KW_DATABASE? __
+    d:database_name {
       tableList.add(`use::${d}::null`);
       return {
         tableList: Array.from(tableList),
@@ -1346,14 +1806,15 @@ alter_table_stmt
 alter_user_stmt    
   = KW_ALTER __
      KW_USER __
-     ident __
+     user_name __
      auth_option? __
-     ident __
+     ident? __
+     
      
 alter_view_stmt     
   = KW_ALTER __
     KW_VIEW __ 
-    ident __ 
+    table_name __ 
     (LPAREN __ column_list __ RPAREN)? __
     KW_AS __
     select_stmt_nake __
@@ -1379,6 +1840,10 @@ alter_action
   / ALTER_ALGORITHM
   / ALTER_LOCK
   / ALTER_CHANGE_COLUMN
+  / alter_rename_stmt
+  / modify_rename_stmt
+  / only_alter_stmt
+  / only_modify_stmt
   / t:table_option {
     t.resource = t.keyword
     t[t.keyword] = t.value
@@ -1392,7 +1857,7 @@ alter_action
 ALTER_ADD_COLUMN
   = KW_ADD __
     kc:KW_COLUMN __
-    cd:create_column_definition {
+    LPAREN? __ cd:create_column_definition __ RPAREN? {
       return {
         action: 'add',
         ...cd,
@@ -1402,7 +1867,7 @@ ALTER_ADD_COLUMN
       }
     }
   / KW_ADD __
-    cd:create_column_definition {
+   LPAREN? __ cd:create_column_definition __ RPAREN? {
       return {
         action: 'add',
         ...cd,
@@ -1412,7 +1877,7 @@ ALTER_ADD_COLUMN
     }
 
 ALTER_DROP_COLUMN
-  = KW_DROP __
+  = (KW_DROP / KW_DELETE) __
     kc:KW_COLUMN __
     c:column_ref {
       return {
@@ -1423,7 +1888,7 @@ ALTER_DROP_COLUMN
         type: 'alter',
       }
     }
-  /  KW_DROP __
+  / (KW_DROP / KW_DELETE) __
     c:column_ref {
       return {
         action: 'drop',
@@ -1837,58 +2302,23 @@ set_stmt
   }
 
 unlock_stmt
-  = KW_UNLOCK __ KW_TABLES {
-    return {
-      tableList: Array.from(tableList),
-      columnList: columnListTableAlias(columnList),
-      ast: {
-        type: 'unlock',
-        keyword: 'tables'
-      }
-    }
-  }
+  = KW_UNLOCK __
+    KW_TABLE? __
+    table_name __
+    unlock_type __
 
 lock_type
-  = "READ"i __ s:("LOCAL"i)? {
-    return {
-      type: 'read',
-      suffix: s && 'local'
-    }
-  }
-  / p:("LOW_PRIORITY"i)? __ "WRITE"i {
-    return {
-      type: 'write',
-      prefix: p && 'low_priority'
-    }
-  }
-
-lock_table
-  = t:table_base __ lt:lock_type {
-    tableList.add(`lock::${t.db}::${t.table}`)
-    return {
-      table: t,
-      lock_type: lt
-    }
-  }
-
-lock_table_list
-  = head:lock_table tail:(__ COMMA __ lock_table)* {
-    return createList(head, tail);
-  }
-
+  = KW_IN __ ("EXCLUSIVE"i / "SHARE"i) __ "MODE"i __ ("WAIT"i __ int)?
+  
+unlock_type
+  = KW_IN __ ("EXCLUSIVE"i / "SHARE"i) __ "MODE"i __ "IMMEDIATE"?
+  
 lock_stmt
-  = KW_LOCK __ KW_TABLES __ ltl:lock_table_list {
-    return {
-      tableList: Array.from(tableList),
-      columnList: columnListTableAlias(columnList),
-      ast: {
-        type: 'lock',
-        keyword: 'tables',
-        tables: ltl
-      }
-    }
-  }
-
+  = KW_LOCK __
+    KW_TABLE? __
+    table_name __
+    lock_type __
+    
 call_stmt
   = KW_CALL __
   e: proc_func_call {
@@ -1901,6 +2331,10 @@ call_stmt
       }
     }
   }
+  
+call_func_stmt
+  = KW_CALL __
+    procedure_name __
 
 show_stmt
   = KW_SHOW __ t:('BINARY'i / 'MASTER'i) __ 'LOGS'i {
@@ -2110,11 +2544,12 @@ locking_read
   }
 
 select_stmt_nake
-  = __ cte:with_clause? __ KW_SELECT ___
-    opts:option_clause? __
-    d:KW_DISTINCT?      __
-    db:distinct_by_clause?  __
+  = __ cte:with_clause? __
+    KW_SELECT __
     t:top?  __
+    opts:option_clause? __
+    db:distinct_by_clause?  __
+    top? __
     c:column_clause     __
     ci:into_clause?      __
     f:from_clause?      __
@@ -2244,7 +2679,7 @@ column_list_item
   }
 
 alias_clause
-  = KW_AS __ i:alias_ident { return i; }
+  = KW_AS __ i:iris_ident_start? alias_ident { return i; }
   / KW_AS? __ i:ident { return i; }
 
 into_clause
@@ -2264,7 +2699,10 @@ into_clause
   }
 
 from_clause
-  = KW_FROM __ l:table_ref_list { return l; }
+  = KW_FROM __ (o:optimize_option)? __ l:table_ref_list { return l , o ; }
+  
+optimize_option
+	= iris_ident_start __ (KW_NOREDUCE / KW_ALLINDEX / KW_FIRSTTABLE / KW_FULL / KW_IGNOREINDEX / KW_INORDER / KW_NOFLATTEN / KW_NOMERGE / KW_NOSVSO / KW_NOTOPOPT / KW_NOUNIONOROPT / KW_NOUNIONOROPT / KW_PARALLEL / KW_STARTTABLE)
 
 table_to_list
   = head:table_to_item tail:(__ COMMA __ table_to_item)* {
@@ -2362,7 +2800,7 @@ table_base
         type: 'dual'
       };
   }
-  / t:table_name __ alias:alias_clause? {
+  / t:table_name __ alias:alias_clause? __ (LPAREN __ literal_string __ RPAREN)? {
       if (t.type === 'var') {
         t.as = alias;
         return t;
@@ -2373,6 +2811,15 @@ table_base
         as: alias,
       };
     }
+   / LPAREN? __ t:table_name __ KW_AS? __ alias_ident? __ RPAREN? {
+      if (t.type === 'var') {
+        return t;
+      }
+      return {
+        db: t.db,
+        table: t.table,
+      };
+    }  
   / LPAREN __ t:table_name __ r:RPAREN __ alias:alias_clause? {
     const parentheses =  true
       if (t.type === 'var') {
@@ -2413,7 +2860,7 @@ join_op
    
 
 table_name
-  = dt:ident tail:(__ DOT __ ident)? {
+  = dt:iris_ident_start? ident tail:(__ DOT __ ident)? {
       const obj = { db: null, table: dt };
       if (tail !== null) {
         obj.db = dt;
@@ -2426,18 +2873,43 @@ table_name
       v.table = v.name;
       return v;
     }
+model_name
+  = dt:iris_ident_start? ident tail:(__ DOT __ ident)?
+  
+method_name
+  = dt:iris_ident_start? ident tail:(__ DOT __ ident)?
+  
+mlconfig_name
+  = dt:iris_ident_start? ident tail:(__ DOT __ ident)?
+  
+query_name
+  = dt:iris_ident_start? ident tail:(__ DOT __ ident)?
+  
+server_name
+  = dt:iris_ident_start? ident tail:(__ DOT __ ident)?
+ 
+class_name_list
+  = class_name __ (COMMA __ class_name)*
+  
+class_name
+  = dt:iris_ident_start? ident tail:(__ DOT __ ident)* 
+   
+schema_name 
+  = dt:iris_ident_start? ident tail:(__ DOT __ ident)?
+
 
 on_clause
   = KW_ON __ e:or_and_where_expr { return e; }
 
 where_clause
   = KW_WHERE __ e:or_and_where_expr { return e; }
-  
+
 top
-  = KW_TOP __ (KW_INT / KW_ALL)? __ e:expr_list { return e.value; }
+  = KW_TOP __ (KW_INT / KW_ALL)? __ e:(int / expr_list) { return e.value; }
   
 distinct_by_clause
-  = d:KW_DISTINCT? __ KW_BY __ e:expr_list { return e.value; }
+  =(KW_DISTINCT __ (KW_BY __ LPAREN __ expr_list __ RPAREN)?) / KW_ALL
+  
  
 group_by_clause
   = KW_GROUP __ KW_BY __ e:expr_list { return e.value; }
@@ -2530,7 +3002,67 @@ update_stmt
         }
       };
     }
+modify_stmt
+ = modify_user_stmt
+ / modify_role_stmt
+ / modify_resource_stmt
+ / modify_namespace_stmt
+ / modify_section_db_stmt
  
+modify_user_stmt
+ = KW_MODIFY __
+   KW_USER __
+   user_name __ 
+   
+modify_role_stmt
+ = KW_MODIFY __ 
+   KW_ROLE __
+   role_name __  
+   
+modify_resource_stmt
+ = KW_MODIFY __
+  "RESOURCE"i __
+   resource_name __
+   
+modify_namespace_stmt
+ = KW_MODIFY __
+  "SECTION"i __
+  "NAMESPACE"i __
+   namespace_name __
+   
+modify_section_db_stmt
+ = KW_MODIFY __
+   "SECTION"i __
+   KW_DATABASE __
+   database_name __
+   
+delete_user_stmt  
+= KW_DELETE __
+   KW_USER __
+   user_name __ 
+   
+delete_role_stmt
+ = KW_DELETE __
+   KW_ROLE __
+   role_name __ 
+   
+delete_resource_stmt
+ = KW_DELETE __
+  "RESOURCE"i __
+  resource_name __
+  
+delete_namespace_stmt
+ = KW_DELETE __
+   "SECTION"i __
+   "NAMESPACE"i __
+   namespace_name __
+   
+delete_section_db_stmt
+ = KW_DELETE __
+   "SECTION"i __
+   KW_DATABASE __
+   database_name __
+   
 delete_stmt
   = __ cte:with_clause? __ KW_DELETE    __
     t:table_ref_list? __
@@ -2804,7 +3336,7 @@ logic_operator_expr
   }
 
 unary_expr
-  = op: additive_operator tail: (__ primary)+ {
+  = op: additive_operator tail: (__ expr)+ {
     return createUnaryExpr(op, tail[0][1]);
   }
 
@@ -2820,7 +3352,7 @@ binary_column_expr
   }
 
 or_and_where_expr
-	= head:expr tail:(__ (KW_AND / KW_OR / COMMA) __ expr)* {
+	= head:expr tail:(__ (KW_AND / KW_OR / (COMMA __)*) __ expr)* {
     const len = tail.length
     let result = head;
     let seperator = ''
@@ -2850,9 +3382,12 @@ and_expr
   = head:not_expr tail:(___ KW_AND __ not_expr)* {
       return createBinaryExprChain(head, tail);
   }
+ 
 //here we should use `NOT` instead of `comparision_expr` to support chain-expr
 not_expr
-  = comparison_expr
+  = for_some_expr
+  / for_some_element_expr
+  / comparison_expr
   / exists_expr
   / (KW_NOT / "!" !"=") __ expr:not_expr {
       return createUnaryExpr('NOT', expr);
@@ -2871,8 +3406,8 @@ exists_expr
   = op:exists_op __ LPAREN __ stmt:set_op_stmt __ RPAREN {
     stmt.parentheses = true;
     return createUnaryExpr(op, stmt);
-  }
-
+  } 
+  
 exists_op
   = nk:(KW_NOT __ KW_EXISTS) { return nk[0] + ' ' + nk[2]; }
   / KW_EXISTS
@@ -2885,17 +3420,23 @@ comparison_op_right
   / like_op_right
   / regexp_op_right
   / all_op_right
+  / contains_op_right
+  / predicate_op_right
+  / matches_op_right
+  / pattern_op_right
+  / startswith_op_right
+  
 
 arithmetic_op_right
-  = l:(__ arithmetic_comparison_operator __ additive_expr)+ {
+  = l:(__ arithmetic_comparison_operator __ KW_ALL? __ additive_expr)+ {
       return { type: 'arithmetic', tail: l };
     }
-
+    
 arithmetic_comparison_operator
-  = ">=" / ">" / "<=" / "<>" / "<" / "=" / "!="
+  = ">=" / ">" / "<=" / "<>" / "<" / "=" / "!=" / "#" / "!"
 
 all_op_right
-  = arithmetic_comparison_operator __ KW_ALL __ select_stmt
+  = arithmetic_comparison_operator __ KW_ALL __ select_stmt?
 
 is_op_right
   = KW_IS __ right:additive_expr {
@@ -2936,6 +3477,25 @@ regexp_op_right
   = op:regexp_op __ b:'BINARY'i? __ e:(func_call / literal_string / column_ref) {
     return  { op: b ? `${op} ${b}` :  op, right: e };
   }
+  
+predicate_op_right
+  = iris_ident_start ("INLIST"i / "INSET"i) __ expr __ ("SIZE"i __ LPAREN LPAREN __ literal __ RPAREN RPAREN)?
+  
+matches_op_right
+  = iris_ident_start "MATCHES"i __ literal
+  / KW_NOT __ iris_ident_start "MATCHES"i __ literal
+  
+pattern_op_right
+  = iris_ident_start "PATTERN"i __ literal
+  
+for_some_expr
+  = KW_FOR __ KW_SOME __ LPAREN __ table_base __ RPAREN __ expr __
+  
+for_some_element_expr
+  =  KW_FOR __ KW_SOME __ iris_ident_start "ELEMENT"i __ LPAREN __ column_name __ RPAREN __ alias_clause? __ LPAREN __ expr __ ((KW_AND / KW_OR) __ expr)* __ RPAREN
+  
+startswith_op_right
+  = iris_ident_start "STARTSWITH"i __ expr
 
 like_op_right
   = op:like_op __ right:(literal / comparison_expr) {
@@ -2946,9 +3506,12 @@ in_op_right
   = op:in_op __ LPAREN  __ l:expr_list __ RPAREN {
       return { op: op, right: l };
     }
-  / op:in_op __ e:(var_decl / column_ref / literal_string) {
+  / op:in_op __ e:(expr / var_decl / column_ref / literal_string) {
       return { op: op, right: e };
     }
+    
+contains_op_right
+ = LBRAKE __ expr
 
 additive_expr
   = head: multiplicative_expr
@@ -2970,19 +3533,22 @@ multiplicative_operator
   / "div"i {
     return 'DIV'
   }
-  / '&' / '>>' / '<<' / '^' / '|' / '~'
-
+  / '&' / '>>' / '<<' / '^' / '|' / '~' 
+  
 primary
   = cast_expr
   / literal
   / fulltext_search
-  / aggr_func
+  / aggr_func 
+  / xml_func
+  / iris_func
+  / iris_json_func
   / func_call
   / case_expr
   / interval_expr
   / column_ref
   / param
-  / LPAREN __ list:or_and_where_expr __ RPAREN {
+  / LPAREN __ expr __ RPAREN {
         list.parentheses = true;
         return list;
     }
@@ -3007,7 +3573,7 @@ column_ref
         properties: a.map(item => item[2])
       };
   }
-  / tbl:(ident_name / backticks_quoted_ident) __ DOT __ col:column_without_kw {
+  / tbl:(ident_name / backticks_quoted_ident) __ (DOT / SINGLE_ARROW) __ col:column_without_kw {
       columnList.add(`select::${tbl}::${col}`);
       return {
         type: 'column_ref',
@@ -3026,6 +3592,10 @@ column_ref
 
 column_list
   = head:column tail:(__ COMMA __ column)* {
+      return createList(head, tail);
+    }
+schema_list
+  = head:schema_name tail:(__ COMMA __ schema_name)* {
       return createList(head, tail);
     }
 
@@ -3068,14 +3638,16 @@ column
   / backticks_quoted_ident
 
 column_name
-  =  start:ident_start parts:column_part* { return start + parts.join(''); }
+  =  start:iris_ident_start? ident_start parts:column_part* { return start + parts.join(''); }
 
 ident_name
   =  start:ident_start parts:ident_part* { return start + parts.join(''); }
+  
+iris_ident_start = ("%" / "$")
 
-ident_start = [A-Za-z_.%$]
+ident_start = [A-Za-z_]
 
-ident_part  = [A-Za-z0-9_$.%]
+ident_part  = [A-Za-z0-9_$]
 
 // to support column name like `cf1:name` in hbase
 column_part  = [A-Za-z0-9_:]
@@ -3088,9 +3660,15 @@ param
 aggr_func
   = aggr_fun_count
   / aggr_fun_smma
+  / aggr_fun_dlist
+  / aggr_fun_json_arrayagg
+  / aggr_fun_list
+  / aggr_fun_STDDEV_STDDEV_SAMP_STDDEV_POP
+  / aggr_fun_variance_var_samp_var_pop
+  / aggr_fun_xmlagg
 
 aggr_fun_smma
-  = name:KW_SUM_MAX_MIN_AVG  __ LPAREN __ e:additive_expr __ RPAREN __ bc:over_partition? {
+  = name:KW_SUM_MAX_MIN_AVG  __ LPAREN __ e:additive_expr? __ arg:avg_arg? __ RPAREN __ bc:over_partition? {
       return {
         type: 'aggr_func',
         name: name,
@@ -3103,6 +3681,9 @@ aggr_fun_smma
 
 KW_SUM_MAX_MIN_AVG
   = KW_SUM / KW_MAX / KW_MIN / KW_AVG
+
+avg_arg
+    = ((KW_DISTINCT __ KW_BY __ LPAREN __ column_list __ RPAREN) / KW_ALL / KW_DISTINCT)? __ expr
 
 on_update_current_timestamp
   = KW_ON __ KW_UPDATE __ kw:KW_CURRENT_TIMESTAMP __ LPAREN __ l:expr_list? __ RPAREN{
@@ -3240,14 +3821,105 @@ concat_separator
 
 count_arg
   = e:star_expr { return { expr: e }; }
-  / d:KW_DISTINCT? __ LPAREN __ c:expr __ RPAREN __ or:order_by_clause? __ s:concat_separator? { return { distinct: d, expr: c, orderby: or, parentheses: true, separator: s }; }
-  / d:KW_DISTINCT? __ c:expr __ or:order_by_clause? __ s:concat_separator? { return { distinct: d, expr: c, orderby: or, separator: s }; }
+ / d:KW_DISTINCT? __ LPAREN __ c:expr __ RPAREN __ or:order_by_clause? __ s:concat_separator? { return { distinct: d, expr: c, orderby: or, parentheses: true, separator: s }; }
+ / d:KW_DISTINCT? __ c:expr __ or:order_by_clause? __ s:concat_separator? { return { distinct: d, expr: c, orderby: or, separator: s }; }
+ / ((KW_DISTINCT __ KW_BY __ LPAREN __ column_list __ RPAREN) / KW_ALL / KW_DISTINCT)? __ expr
+  
+aggr_fun_dlist
+  = name:iris_ident_start "DLIST"i __ LPAREN __ e:additive_expr? __ arg:dlist_arg? __ RPAREN __ bc:over_partition? {
+      return {
+        type: 'aggr_func',
+        name: name,
+        args: {
+          expr: e
+        },
+        over: bc,
+      };
+    }
+
+dlist_arg
+ = ((KW_DISTINCT __ KW_BY __ LPAREN __ column_list __ RPAREN) / KW_ALL / KW_DISTINCT)? __ column_name __ expr?
+
+aggr_fun_json_arrayagg
+	= name:KW_JSON_ARRAYAGG __ LPAREN __ e:additive_expr? __ arg:json_arrayagg_arg? __ RPAREN __ bc:over_partition? {
+      return {
+        type: 'aggr_func',
+        name: name,
+        args: {
+          expr: e
+        },
+        over: bc,
+      };
+    }
+
+json_arrayagg_arg
+ = ((KW_DISTINCT __ KW_BY __ LPAREN __ column_list __ RPAREN) / KW_ALL / KW_DISTINCT)? __ column_name __ expr?
+
+aggr_fun_list
+	= name:KW_LIST __ LPAREN __ e:additive_expr? __ arg:list_arg? __ RPAREN __ bc:over_partition? {
+      return {
+        type: 'aggr_func',
+        name: name,
+        args: {
+          expr: e
+        },
+        over: bc,
+      };
+    }
+
+list_arg
+ = ((KW_DISTINCT __ KW_BY __ LPAREN __ column_list __ RPAREN) / KW_ALL / KW_DISTINCT)? __ column_name __ expr?
+
+aggr_fun_STDDEV_STDDEV_SAMP_STDDEV_POP
+     = name:(KW_STDDEV / KW_STDDEV_SAMP / KW_STDDEV_POP) __ LPAREN __ e:additive_expr? __ arg:STDDEV_STDDEV_SAMP_STDDEV_POP_arg? __ RPAREN __ bc:over_partition? {
+      return {
+        type: 'aggr_func',
+        name: name,
+        args: {
+          expr: e
+        },
+        over: bc,
+      };
+    }
+
+STDDEV_STDDEV_SAMP_STDDEV_POP_arg
+	= ((KW_DISTINCT __ KW_BY __ LPAREN __ column_list __ RPAREN) / KW_ALL / KW_DISTINCT)? __ expr
+
+aggr_fun_variance_var_samp_var_pop
+  	=  name:(KW_VARIANCE / KW_VAR_SAMP / KW_VAR_POP) __ LPAREN __ e:additive_expr? __ arg:variance_var_samp_var_pop_arg? __ RPAREN __ bc:over_partition? {
+      return {
+        type: 'aggr_func',
+        name: name,
+        args: {
+          expr: e
+        },
+        over: bc,
+      };
+    }
+
+variance_var_samp_var_pop_arg
+	=  ((KW_DISTINCT __ KW_BY __ LPAREN __ column_list __ RPAREN) / KW_ALL / KW_DISTINCT)? __ expr
+
+aggr_fun_xmlagg
+ =  name:(KW_XMLAGG) __ LPAREN __ e:additive_expr? __ arg:xmlagg_arg? __ RPAREN __ bc:over_partition? {
+      return {
+        type: 'aggr_func',
+        name: name,
+        args: {
+          expr: e
+        },
+        over: bc,
+      };
+    }
+
+xmlagg_arg
+	=  ((KW_DISTINCT __ KW_BY __ LPAREN __ column_list __ RPAREN) / KW_ALL / KW_DISTINCT)? __ column_name __ expr?
 
 star_expr
   = "*" { return { type: 'star', value: '*' }; }
 
 convert_args
-  = c:(column_ref / literal_string  / literal_numeric) __ COMMA __ ch:character_string_type  __ cs:create_option_character_set_kw __ v:ident_name {
+  = c:primary __ COMMA __ ch:character_string_type  __ cs:create_option_character_set_kw __ v:ident_name {
     const { dataType, length } = ch
     let dataTypeStr = dataType
     if (length !== undefined) dataTypeStr = `${dataTypeStr}(${length})`
@@ -3262,19 +3934,32 @@ convert_args
       ]
     }
   }
-  / c:(column_ref / literal_string / literal_numeric) __ COMMA __ d:data_type {
+  / c:primary __ COMMA __ d:data_type {
     return {
       type: 'expr_list',
       value: [c, { type: 'datatype', ...d, }]
     }
   }
-  / c:(column_ref / literal_string / literal_numeric) __ KW_USING __ d:ident_name {
+  / c:primary __ KW_USING __ d:ident_name {
     c.suffix = `USING ${d}`
     return {
       type: 'expr_list',
       value: [c]
     }
   }
+  / d:data_type __ COMMA __ c:primary __ COMMA __ literal {
+    return {
+      type: 'expr_list',
+      value: [c, { type: 'datatype', ...d, }]
+    }
+  }
+  / d:data_type __ COMMA __ c:additive_operator? __ primary {
+    return {
+      type: 'expr_list',
+      value: [c, { type: 'datatype', ...d, }]
+    }
+  }
+  
 extract_filed
   = f:('CENTURY'i / 'DAY'i / 'DATE'i / 'DECADE'i / 'DOW'i / 'DOY'i / 'EPOCH'i / 'HOUR'i / 'ISODOW'i / 'ISOWEEK'i / 'ISOYEAR'i / 'MICROSECONDS'i / 'MILLENNIUM'i / 'MILLISECONDS'i / 'MINUTE'i / 'MONTH'i / 'QUARTER'i / 'SECOND'i / 'TIME'i / 'TIMEZONE'i / 'TIMEZONE_HOUR'i / 'TIMEZONE_MINUTE'i / 'WEEK'i / 'YEAR'i) {
     return f
@@ -3352,7 +4037,7 @@ func_call
         args: l ? l: { type: 'expr_list', value: [] },
         over: bc
       };
-    }
+    } 
   / name:scalar_func __ LPAREN __ l:expr_list? __ RPAREN __ bc:over_partition? {
       return {
         type: 'function',
@@ -3368,6 +4053,75 @@ func_call
         over: up
     }
   }
+  
+predict_func
+  = KW_PREDICT __ LPAREN __ model_name __ KW_USE __ model_name __ KW_WITH __ LPAREN? __ LCURLY? __ expr? __ ("," __ expr*)? __ RCURLY? __ ("," __ LCURLY? __ expr? __ ("," __ expr*)? __ RCURLY?)* __ RPAREN? __ RPAREN
+  / KW_PREDICT __ LPAREN __ model_name __ KW_WITH __ LPAREN? __ LCURLY? __ expr? __ ("," __ expr*)? __ RCURLY? __ ("," __ LCURLY? __ expr? __ ("," __ expr*)? __ RCURLY?)* __ RPAREN? __ RPAREN?
+  / KW_PREDICT __ LPAREN __ model_name __ KW_USE __ model_name __ RPAREN
+  / KW_PREDICT __ LPAREN __ model_name __ RPAREN
+
+search_index_func
+ = "SEARCH_INDEX"i __ LPAREN __ (schema_name? __ table_name)? __ index_name __ RPAREN
+  
+probability_func
+ = "PROBABILITY"i __ LPAREN __ model_name __ (KW_USE __ model_name)? __ (KW_FOR __ literal) __ (KW_WITH __ expr_list)? __ RPAREN
+   
+iris_json_func
+  = "JSON_OBJECT"i __ LPAREN __ (__  literal_string __ ":" __  expr __)? __ (__ "," __  literal_string __ ":" __  expr __)* __ ( ( "ABSENT"i / "NULL"i ) __ "ON"i __ "NULL"i )? __ RPAREN
+  / "JSON_ARRAY"i __ LPAREN __(__ expr __)? __ (__ "," __ expr __)* __ ( ( "ABSENT"i / "NULL"i ) __ "ON"i __ "NULL"i )? __ RPAREN
+  
+iris_func
+  = LCURLY __ "fn"i __ func_call __ RCURLY
+  / LCURLY __ "fn"i __ ("CURDATE"i / "CURTIME"i / "NOW"i / "PI"i / "LEFT"i / "RIGHT"i) __ RCURLY
+  / LCURLY __ "fn"i __ ("LEFT"i / "RIGHT"i) __ LPAREN __ expr __ COMMA __ literal __ RPAREN __ RCURLY
+  / LCURLY __ "fn"i __ KW_DATABASE __ LPAREN __ RPAREN __ RCURLY
+  / predict_func
+  / probability_func
+  / search_index_func
+  / upper_func
+  / sqlupper_func
+  / sqlstring_func
+  / external_func
+  / internal_func
+  / odbcin_func
+  / odbcout_func
+     
+upper_func
+ = "UPPER"i __ ((LPAREN __ expr __ RPAREN) / expr)
+ 
+sqlupper_func
+ = iris_ident_start "SQLUPPER"i __ ((LPAREN __ expr __ (COMMA __ expr)? __ RPAREN) / expr)
+ 
+sqlstring_func
+ = iris_ident_start "SQLSTRING"i __ ((LPAREN __ expr __ (COMMA __ expr)? __ RPAREN) / expr)
+ 
+external_func
+ = iris_ident_start "EXTERNAL"i __ ((LPAREN __ expr __ RPAREN) / expr)
+ 
+internal_func
+ = iris_ident_start "INTERNAL"i __ ((LPAREN __ expr __ RPAREN) / expr)
+ 
+odbcin_func
+ = iris_ident_start "ODBCIN"i __ ((LPAREN __ expr __ RPAREN) / expr)
+ 
+odbcout_func
+ = iris_ident_start "ODBCOUT"i __ ((LPAREN __ expr __ RPAREN) / expr)
+       
+xml_func
+ = xmlconcat_func
+ / xmlelement_func
+ / xmlforest_func
+   
+xmlelement_func
+ = KW_XMLELEMENT __ LPAREN __(__ KW_NAME? __ literal_string? __ "," __ expr __) __ (__ "," __ expr __)* __ RPAREN
+ / KW_XMLELEMENT __ LPAREN __(__ KW_NAME? __ literal_string? __ "," __ KW_XMLATTRIBUTES __ LPAREN __ expr __ alias_clause? __ RPAREN __) __ (__ "," __ expr __)* __ RPAREN
+
+xmlconcat_func
+ = KW_XMLCONCAT __ LPAREN __ (xmlelement_func __ "," __ xmlelement_func) __ (__ "," __ xmlelement_func)* __ RPAREN
+ 
+xmlforest_func
+ = KW_XMLFOREST __ LPAREN __ (__ expr __ alias_clause? __) __ (__ "," __ expr __ alias_clause? __)* __ RPAREN
+  
 scalar_time_func
   = KW_CURRENT_DATE
   / KW_CURRENT_TIME
@@ -3514,7 +4268,7 @@ literal_string
         value: ca[1].join('')
       };
     }
-  / ca:("\"" single_quote_char* "\"") {
+  / ca:('"' single_quote_char* '"') {
       return {
         type: 'string',
         value: ca[1].join('')
@@ -3534,6 +4288,7 @@ literal_datetime
         value: ca[1].join('')
       };
     }
+   / LCURLY __ ("d" / "ts") __ literal_string __ RCURLY
 
 single_quote_char
   = [^"\\] // remove \0-\x1F\x7f pnCtrl char [^"\\\0-\x1F\x7f]
@@ -3603,9 +4358,8 @@ number
 
 int
   = digits
-  / digit:digit
   / op:("-" / "+" ) digits:digits { return op + digits; }
-  / op:("-" / "+" ) digit:digit { return op + digit; }
+  
 
 frac
   = "." digits:digits { return "." + digits; }
@@ -3628,6 +4382,7 @@ KW_PURGE     = "PURGE"i     !ident_start
 KW_CACHED     = "CACHED"i     !ident_start
 KW_QUERIES    = "QUERIES"i     !ident_start
 KW_NAME    = "NAME"i     !ident_start
+KW_PREDICT     = "PREDICT"i     !ident_start
 KW_PREDICTING     = "PREDICTING"i     !ident_start
 KW_TUNE      = "TUNE"i      !ident_start
 KW_TRAIN     = "TRAIN"i     !ident_start
@@ -3652,6 +4407,7 @@ KW_NOT_NULL = "NOT NULL"i   !ident_start
 KW_TRUE     = "TRUE"i       !ident_start
 KW_TO       = "TO"i         !ident_start
 KW_FALSE    = "FALSE"i      !ident_start
+KW_REVOKE   = "REVOKE"i     !ident_start
 
 KW_IDENTIFIED = "IDENTIFIED"i !ident_start
 KW_IDENTIFY   = "IDENTIFY"i  !ident_start
@@ -3679,6 +4435,19 @@ KW_FROM     = "FROM"i       !ident_start
 KW_SET      = "SET"i        !ident_start
 KW_UNLOCK   = "UNLOCK"i     !ident_start
 KW_LOCK     = "LOCK"i       !ident_start
+//optimize-option
+KW_NOREDUCE			= "NOREDUCE"i		!ident_start
+KW_ALLINDEX 		= "ALLINDEX"i		!ident_start			
+KW_FIRSTTABLE		= "FIRSTTABLE"i		!ident_start
+KW_IGNOREINDEX		= "IGNOREINDEX"i 	!ident_start
+KW_INORDER			= "INORDER"i		!ident_start
+KW_NOFLATTEN		= "NOFLATTEN"i		!ident_start
+KW_NOMERGE			= "NOMERGE"i		!ident_start
+KW_NOSVSO			= "NOSVSO"i			!ident_start
+KW_NOTOPOPT			= "NOTOPOPT"i		!ident_start
+KW_NOUNIONOROPT		= "NOUNIONOROPT	"i	!ident_start
+KW_PARALLEL			= "PARALLEL"i		!ident_start
+KW_STARTTABLE		= "STARTTABLE"i		!ident_start
 
 KW_AS       = "AS"i         !ident_start
 KW_TABLE    = "TABLE"i      !ident_start { return 'TABLE'; }
@@ -3695,6 +4464,7 @@ KW_SAVEPOINT  = "SAVEPOINT"i    !ident_start { return 'SAVEPOINT'; }
 KW_ROLLBACK   = "ROLLBACK"i     !ident_start
 
 KW_ON       = "ON"i       !ident_start
+KW_OF       = "OF"i       !ident_start
 KW_LEFT     = "LEFT"i     !ident_start
 KW_RIGHT    = "RIGHT"i    !ident_start
 KW_FULL     = "FULL"i     !ident_start
@@ -3742,6 +4512,7 @@ KW_LIKE     = "LIKE"i       !ident_start { return 'LIKE'; }
 KW_RLIKE    = "RLIKE"i      !ident_start { return 'RLIKE'; }
 KW_REGEXP   = "REGEXP"i     !ident_start { return 'REGEXP'; }
 KW_EXISTS   = "EXISTS"i     !ident_start { return 'EXISTS'; }
+KW_SOME		= "SOME"i			!ident_start { return 'SOME'; }
 
 KW_NOT      = "NOT"i        !ident_start { return 'NOT'; }
 KW_AND      = "AND"i        !ident_start { return 'AND'; }
@@ -3753,6 +4524,21 @@ KW_MAX      = "MAX"i        !ident_start { return 'MAX'; }
 KW_MIN      = "MIN"i        !ident_start { return 'MIN'; }
 KW_SUM      = "SUM"i        !ident_start { return 'SUM'; }
 KW_AVG      = "AVG"i        !ident_start { return 'AVG'; }
+KW_JSON_ARRAY	= "JSON_ARRAY"i	!ident_start { return 'JSON_ARRAY'; }
+KW_JSON_OBJECT	= "JSON_OBJECT"i	!ident_start { return 'JSON_OBJECT'; }
+KW_JSON_ARRAYAGG	= "JSON_ARRAYAGG"i	!ident_start { return 'JSON_ARRAYAGG'; }
+KW_LIST		= "LIST"i	!ident_start { return 'LIST'; }
+KW_STDDEV	= "STDDEV"i	!ident_start { return 'STDDEV'; }	  
+KW_STDDEV_SAMP	= "STDDEV_SAMP"i  !ident_start { return 'STDDEV_SAMP'; }
+KW_STDDEV_POP	= "STDDEV_POP"i		!ident_start { return 'STDDEV_POP'; }
+KW_VARIANCE		= "VARIANCE"i		!ident_start { return 'VARIANCE'; }
+KW_VAR_SAMP		= "VAR_SAMP"i		!ident_start { return 'VAR_SAMP'; }		
+KW_VAR_POP		= "VAR_POP"i		!ident_start { return 'VAR_POP'; }
+KW_XMLAGG		= "XMLAGG"i			!ident_start { return 'XMLAGG'; }
+KW_XMLELEMENT		= "XMLELEMENT"i			!ident_start { return 'XMLELEMENT'; }
+KW_XMLATTRIBUTES		= "XMLATTRIBUTES"i			!ident_start { return 'XMLATTRIBUTES'; }
+KW_XMLCONCAT		= "XMLCONCAT"i			!ident_start { return 'XMLCONCAT'; }
+KW_XMLFOREST		= "XMLFOREST"i			!ident_start { return 'XMLFOREST'; }
 
 KW_EXTRACT  = "EXTRACT"i    !ident_start { return 'EXTRACT'; }
 KW_CALL     = "CALL"i       !ident_start { return 'CALL'; }
@@ -3799,11 +4585,38 @@ KW_DATETIME     = "DATETIME"i     !ident_start { return 'DATETIME'; }
 KW_ROWS     = "ROWS"i     !ident_start { return 'ROWS'; }
 KW_TIME     = "TIME"i     !ident_start { return 'TIME'; }
 KW_TIMESTAMP = "TIMESTAMP"i !ident_start { return 'TIMESTAMP'; }
-KW_TOP = "TOP"i !ident_start
+KW_TIMESTAMP2 = "TIMESTAMP2"i !ident_start { return 'TIMESTAMP'; }
+KW_TOP       = "TOP"i !ident_start { return 'TOP'; }
 KW_YEAR = "YEAR"i !ident_start { return 'YEAR'; }
 KW_TRUNCATE = "TRUNCATE"i !ident_start { return 'TRUNCATE'; }
 KW_USER     = "USER"i     !ident_start { return 'USER'; }
 KW_ROLE     = "ROLE"i     !ident_start
+KW_VARYING	= "VARYING"i		!ident_start { return 'VARYING'; }
+KW_CHARACTER	= "CHARACTER"i	!ident_start { return 'CHARACTER'; }
+KW_CLOB 		= "CLOB"i	!ident_start { return 'CLOB'; }
+KW_DEC 			= "DEC"i 	!ident_start { return 'DEC'; }
+KW_DATETIME2 	= "DATETIME2"i 	!ident_start { return 'DATETIME2'; }
+KW_PRECISION 	= "PRECISION"i 	!ident_start { return 'PRECISION'; }
+KW_IMAGE 		= "IMAGE"i 	!ident_start { return 'IMAGE'; }
+KW_LONG 		= "LONG"i 	!ident_start { return 'LONG'; }
+KW_RAW			= "RAW"i	!ident_start { return 'RAW'; }
+KW_LONGVARBINARY = "LONGVARBINARY"i	 !ident_start { return 'LONGVARBINARY'; }
+KW_LONGVARCHAR	= "LONGVARCHAR"i	!ident_start { return 'RAW'; }
+KW_NATIONAL		= "NATIONAL"i	!ident_start { return 'RAW'; }
+KW_NCHAR		= "NCHAR"i	!ident_start { return 'NCHAR'; }
+KW_NTEXT		= "NTEXT"i	!ident_start { return 'NTEXT'; }
+KW_NUMBER		= "NUMBER"i	 !ident_start { return 'NUMBER'; }
+KW_POSIXTIME	= "POSIXTIME"i	!ident_start { return 'POSIXTIME'; }  
+KW_VARCHAR2		= "VARCHAR2" !ident_start { return 'VARCHAR2'; }
+KW_NVARCHAR		= "NVARCHAR" !ident_start { return 'NVARCHAR'; }
+KW_MONEY		= "MONEY"i	!ident_start { return 'MONEY'; }
+KW_SMALLMONEY	= "SMALLMONEY"i !ident_start { return 'MONEY'; }
+KW_SMALLDATETIME	= "SMALLDATETIME"i !ident_start { return 'SMALLDATETIME'; }
+KW_SYSNAME			= "SYSNAME"i	!ident_start { return 'SYSNAME'; }
+KW_UNIQUEIDENTIFIER	= "UNIQUEIDENTIFIER" !ident_start { return 'UNIQUEIDENTIFIER'; }
+KW_REAL				= "REAL"  !ident_start { return 'REAL'; }
+KW_ROWVERSION     	= "ROWVERSION"  !ident_start { return 'ROWVERSION'; }
+KW_SERIAL			= "SERIAL"  !ident_start { return 'SERIAL'; }
 
 KW_CURRENT_DATE     = "CURRENT_DATE"i !ident_start { return 'CURRENT_DATE'; }
 KW_ADD_DATE         = "ADDDATE"i !ident_start { return 'ADDDATE'; }
@@ -3877,10 +4690,14 @@ COMMA     = ','
 STAR      = '*'
 LPAREN    = '('
 RPAREN    = ')'
-LCURLY    = '{'
-RCURLY    = '}'
+
 LBRAKE    = '['
 RBRAKE    = ']'
+
+LCURLY    = '{'
+RCURLY    = '}'
+
+
 COLON     = ':'
 SEMICOLON = ';'
 SINGLE_ARROW = '->'
@@ -4008,7 +4825,7 @@ proc_primary
     }
 
 proc_func_name
-  = dt:(ident_name / quoted_ident) tail:(__ DOT __ (ident_name / quoted_ident))? {
+  = iris_ident_start? dt:(ident_name / quoted_ident) tail:(__ DOT __ (ident_name / quoted_ident))? {
       let name = dt
       if (tail !== null) {
         name = `${dt}.${tail[3]}`
@@ -4106,27 +4923,40 @@ data_type
   / boolean_type
   / binary_type
   / blob_type
+  / clob_type
   / geometry_type
-
+  / image_type
+  / long_type
+    
 boolean_type
   = 'boolean'i { return { dataType: 'BOOLEAN' }; }
 
 blob_type
   = b:('blob'i / 'tinyblob'i / 'mediumblob'i / 'longblob'i) { return { dataType: b.toUpperCase() }; }
 
+clob_type
+  = b:(KW_CLOB) { return { dataType: b.toUpperCase() }; }
+  
 binary_type
-  = t:(KW_BINARY / KW_VARBINARY) __ LPAREN __ l:[0-9]+ __ RPAREN {
+  = t:((KW_LONG? __ KW_BINARY __ KW_VARYING?) / KW_VARBINARY) __ LPAREN __ l:[0-9]+ __ RPAREN {
     return { dataType: t, length: parseInt(l.join(''), 10) };
   }
-  / t:KW_BINARY { return { dataType: t }; }
+  / t:(KW_LONG? __ KW_BINARY __ KW_VARYING?) / KW_VARBINARY { return { dataType: t }; }
+  / KW_LONGVARBINARY __ LPAREN __ l:[0-9]+ __ RPAREN
+  / t:KW_LONGVARBINARY { return { dataType: t }; }
 
 character_string_type
-  = t:(KW_CHAR / KW_VARCHAR) __ LPAREN __ l:[0-9]+ __ RPAREN {
+  = t:((KW_NATIONAL? __ KW_CHAR __ KW_VARYING?) / KW_NVARCHAR / KW_VARCHAR2 / KW_LONG? __ KW_NATIONAL? __ KW_VARCHAR / KW_LONGVARCHAR / KW_NATIONAL? __ KW_CHARACTER __ KW_VARYING? / KW_NCHAR) __ LPAREN __ l:[0-9]+ __ r:(COMMA __ [0-9]+)? __ RPAREN {
     return { dataType: t, length: parseInt(l.join(''), 10) };
   }
-  / t:KW_CHAR { return { dataType: t }; }
-  / t:KW_VARCHAR { return { dataType: t }; }
-
+  / t:KW_NATIONAL? __ KW_CHAR __ KW_VARYING? { return { dataType: t }; }
+  / t:KW_NVARCHAR __ (LPAREN __ "MAX"i __ RPAREN)? { return { dataType: t }; }
+  / t:KW_LONG? __ KW_NATIONAL? __ KW_VARCHAR __ (LPAREN __ "MAX"i __ RPAREN)? { return { dataType: t }; }
+  / t:KW_CHARACTER __ KW_VARYING? { return { dataType: t }; }
+  / t:KW_LONGVARCHAR { return { dataType: t }; }
+  / t:KW_NCHAR { return { dataType: t }; }
+  / t:KW_BIT { return { dataType: t }; }
+  
 numeric_type_suffix
   = un: KW_UNSIGNED? __ ze: KW_ZEROFILL? {
     const result = []
@@ -4135,14 +4965,21 @@ numeric_type_suffix
     return result
   }
 numeric_type
-  = t:(KW_NUMERIC / KW_DECIMAL / KW_INT / KW_INTEGER / KW_SMALLINT / KW_MEDIUMINT / KW_TINYINT / KW_BIGINT / KW_FLOAT / KW_DOUBLE / KW_BIT) __ LPAREN __ l:[0-9]+ __ r:(COMMA __ [0-9]+)? __ RPAREN __ s:numeric_type_suffix? { return { dataType: t, length: parseInt(l.join(''), 10), scale: r && parseInt(r[2].join(''), 10), parentheses: true, suffix: s }; }
-  / t:(KW_NUMERIC / KW_DECIMAL / KW_INT / KW_INTEGER / KW_SMALLINT / KW_MEDIUMINT/ KW_TINYINT / KW_BIGINT / KW_FLOAT / KW_DOUBLE)l:[0-9]+ __ s:numeric_type_suffix? { return { dataType: t, length: parseInt(l.join(''), 10), suffix: s }; }
-  / t:(KW_NUMERIC / KW_DECIMAL / KW_INT / KW_INTEGER / KW_SMALLINT / KW_MEDIUMINT / KW_TINYINT / KW_BIGINT / KW_FLOAT / KW_DOUBLE) __ s:numeric_type_suffix? __{ return { dataType: t, suffix: s }; }
-
+  = t:(KW_NUMERIC / KW_DECIMAL / KW_DEC / KW_INT / KW_INTEGER / KW_SMALLINT / KW_MEDIUMINT / KW_TINYINT / KW_BIGINT / KW_FLOAT / KW_DOUBLE __ KW_PRECISION? / KW_BIT / KW_NUMBER) __ LPAREN __ l:[0-9]+ __ r:(COMMA __ [0-9]+)? __ RPAREN __ s:numeric_type_suffix? { return { dataType: t, length: parseInt(l.join(''), 10), scale: r && parseInt(r[2].join(''), 10), parentheses: true, suffix: s }; }
+  / t:(KW_NUMERIC / KW_DECIMAL / KW_DEC / KW_INT / KW_INTEGER / KW_SMALLINT / KW_MEDIUMINT / KW_TINYINT / KW_BIGINT / KW_FLOAT / KW_DOUBLE __ KW_PRECISION? / KW_NUMBER)l:[0-9]+ __ s:numeric_type_suffix? { return { dataType: t, length: parseInt(l.join(''), 10), suffix: s }; }
+  / t:(KW_NUMERIC / KW_DECIMAL / KW_DEC / KW_INT / KW_INTEGER / KW_SMALLINT / KW_MEDIUMINT / KW_TINYINT / KW_BIGINT / KW_FLOAT / KW_DOUBLE __ KW_PRECISION? / KW_NUMBER / KW_MONEY / KW_SMALLMONEY / KW_REAL / KW_ROWVERSION) __ s:numeric_type_suffix? __{ return { dataType: t, suffix: s }; }
 
 datetime_type
-  = t:(KW_DATE / KW_DATETIME / KW_TIME / KW_TIMESTAMP / KW_YEAR) __ LPAREN __ l:[0-6] __ RPAREN __ s:numeric_type_suffix? { return { dataType: t, length: parseInt(l, 10), parentheses: true }; }
-  / t:(KW_DATE / KW_DATETIME / KW_TIME / KW_TIMESTAMP / KW_YEAR) { return { dataType: t }; }
+  = t:(KW_DATE / KW_DATETIME2 / KW_DATETIME  / KW_TIME / iris_ident_start? __ KW_TIMESTAMP / KW_TIMESTAMP2 / KW_YEAR / KW_POSIXTIME) __ LPAREN __ l:[0-6] __ RPAREN __ s:numeric_type_suffix? { return { dataType: t, length: parseInt(l, 10), parentheses: true }; }
+  / t:(KW_DATE / KW_DATETIME2 / KW_DATETIME  / KW_TIME / iris_ident_start? __ KW_TIMESTAMP / KW_TIMESTAMP2 /KW_YEAR / KW_POSIXTIME / KW_SMALLDATETIME) { return { dataType: t }; }
+
+image_type
+ 	= t:KW_IMAGE { return { dataType: t }; }
+
+long_type
+	=  (t:KW_LONG? __ KW_RAW?) __ (LPAREN __ l:[0-9]+ __ RPAREN)? {
+    return { dataType: t, length: parseInt(l.join(''), 10) };
+  }
 
 enum_type
   = t:(KW_ENUM / KW_SET) __ e:value_item {
@@ -4157,7 +4994,7 @@ json_type
   = t:KW_JSON { return { dataType: t }; }
 
 text_type
-  = t:(KW_TINYTEXT / KW_TEXT / KW_MEDIUMTEXT / KW_LONGTEXT) { return { dataType: t }}
+  = t:(KW_TINYTEXT / KW_TEXT / KW_MEDIUMTEXT / KW_LONGTEXT / KW_NTEXT / KW_SYSNAME / KW_UNIQUEIDENTIFIER / KW_SERIAL) { return { dataType: t }}
 
 geometry_type
   = t:(KW_GEOMETRY / KW_POINT / KW_LINESTRING / KW_POLYGON / KW_MULTIPOINT / KW_MULTILINESTRING / KW_MULTIPOLYGON / KW_GEOMETRYCOLLECTION ) { return { dataType: t }}
